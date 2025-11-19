@@ -38,7 +38,7 @@ npm run cf-typegen
 
 #### POST /send
 
-Discordチャンネルにメッセージを送信します。
+Discordチャンネルにシンプルなテキストメッセージを送信します。
 
 **リクエスト例:**
 
@@ -55,6 +55,118 @@ curl -X POST https://your-worker.workers.dev/send \
 
 - `channelId` (string, 必須): DiscordチャンネルID
 - `message` (string, 必須): 送信するメッセージ内容
+
+#### POST /send/rich
+
+Discordチャンネルにリッチメッセージ（埋め込みとボタンコンポーネント）を送信します。
+
+**リクエスト例:**
+
+```bash
+curl -X POST http://localhost:8787/send/rich \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channelId": "1234567890123456789",
+    "content": "📢 **進捗確認を記述してください。**",
+    "embeds": [
+      {
+        "title": "進捗確認",
+        "description": "以下のボタンから進捗状況を確認できます。",
+        "color": 16753920,
+        "fields": [
+          {
+            "name": "チェック状況",
+            "value": "まだ確認されていません"
+          }
+        ],
+        "timestamp": "2025-11-19T09:00:00.000Z"
+      }
+    ],
+    "components": [
+      {
+        "type": 1,
+        "components": [
+          {
+            "type": 2,
+            "style": 1,
+            "label": "確認済みにする",
+            "custom_id": "checked_today"
+          },
+          {
+            "type": 2,
+            "style": 5,
+            "label": "進捗を確認する",
+            "url": "https://bk-realty.co.jp/latest"
+          }
+        ]
+      }
+    ]
+  }'
+```
+
+**リクエストボディ:**
+
+- `channelId` (string, 必須): DiscordチャンネルID
+- `content` (string, オプション): 送信するテキストメッセージ内容
+- `embeds` (array, オプション): 埋め込みメッセージの配列
+  - `title` (string): 埋め込みのタイトル
+  - `description` (string): 埋め込みの説明
+  - `color` (number): 埋め込みの色（10進数、例: 16753920 = オレンジ）
+  - `fields` (array): フィールドの配列
+    - `name` (string): フィールド名
+    - `value` (string): フィールドの値
+    - `inline` (boolean): インライン表示するか
+  - `timestamp` (string): ISO 8601形式のタイムスタンプ
+- `components` (array, オプション): インタラクティブコンポーネント（ボタンなど）の配列
+  - `type` (number): コンポーネントタイプ（1 = Action Row）
+  - `components` (array): ボタンなどのコンポーネント配列
+    - `type` (number): 2 = ボタン
+    - `style` (number): ボタンスタイル（1 = Primary, 5 = Link）
+    - `label` (string): ボタンのラベル
+    - `custom_id` (string): カスタムID（インタラクション用、style=1の場合）
+    - `url` (string): リンクURL（style=5の場合）
+
+**注意**: このエンドポイントはリクエストボディなしで呼び出せます。テンプレートメッセージが自動的に送信されます。
+
+**レスポンス例:**
+
+成功時:
+
+```json
+{
+  "success": true,
+  "message": "Rich message sent successfully",
+  "data": {
+    "id": "1234567890123456789",
+    "content": "📢 **進捗確認を記述してください。**",
+    ...
+  }
+}
+```
+
+#### POST /interactions
+
+Discordのインタラクション（ボタンクリックなど）を処理します。
+
+**セットアップ:**
+
+1. Discord Developer PortalでインタラクションURLを設定
+   - [Discord Developer Portal](https://discord.com/developers/applications)でアプリケーションを開く
+   - General Information → Interactions Endpoint URL に設定
+   - ローカル: `http://localhost:8787/interactions`
+   - 本番: デプロイ後のURL + `/interactions`
+
+2. Botに必要な権限を付与
+   - `applications.commands`スコープ
+   - `bot`スコープ
+   - 「メッセージを送信」「メッセージの管理」権限
+
+**動作:**
+
+- `checked_today`ボタンがクリックされると:
+  - メッセージが更新され、「確認済み」状態になる
+  - ボタンが無効化される
+  - クリックしたユーザーに「✅ 進捗確認が完了しました！」という通知が表示される
 
 **レスポンス例:**
 

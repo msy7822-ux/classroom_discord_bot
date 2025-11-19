@@ -25,6 +25,52 @@ async function sendDiscordMessage(
   return response;
 }
 
+// Discord APIにリッチメッセージ（埋め込みとボタン）を送信する関数
+async function sendRichDiscordMessage(
+  channelId: string,
+  payload: {
+    content?: string;
+    embeds?: Array<{
+      title?: string;
+      description?: string;
+      color?: number;
+      fields?: Array<{
+        name: string;
+        value: string;
+        inline?: boolean;
+      }>;
+      timestamp?: string;
+      [key: string]: unknown;
+    }>;
+    components?: Array<{
+      type: number;
+      components: Array<{
+        type: number;
+        style?: number;
+        label?: string;
+        custom_id?: string;
+        url?: string;
+        [key: string]: unknown;
+      }>;
+      [key: string]: unknown;
+    }>;
+  },
+  botToken: string
+): Promise<Response> {
+  const url = `https://discord.com/api/v10/channels/${channelId}/messages`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return response;
+}
+
 // ルートエンドポイント
 app.get("/", (c) => {
   const tokenConfigured = !!c.env.DISCORD_BOT_TOKEN;
@@ -32,6 +78,8 @@ app.get("/", (c) => {
     message: "Discord Bot API",
     endpoints: {
       "POST /send": "Send a message to Discord channel",
+      "POST /send/rich": "Send a rich message with embeds and buttons",
+      "POST /interactions": "Handle Discord interactions (button clicks)",
       "GET /auth/discord": "Start Discord OAuth2 authentication",
       "GET /auth/discord/callback": "Discord OAuth2 callback",
       "GET /env": "Check environment variables (debug)",
@@ -277,6 +325,28 @@ app.post("/send", async (c) => {
       );
     }
 
+    // チャンネルIDの形式を検証（Discordのsnowflake IDは数値文字列）
+    if (
+      typeof channelId !== "string" ||
+      !/^\d{17,19}$/.test(channelId) ||
+      channelId === "YOUR_CHANNEL_ID"
+    ) {
+      return c.json(
+        {
+          error: "Invalid channelId format",
+          details:
+            "channelId must be a valid Discord channel ID (17-19 digit number). Please replace 'YOUR_CHANNEL_ID' with an actual channel ID.",
+          received: channelId,
+          troubleshooting: [
+            "Enable Developer Mode in Discord settings",
+            "Right-click on the channel → Copy ID",
+            "Make sure the channel ID is a 17-19 digit number",
+          ],
+        },
+        400
+      );
+    }
+
     const response = await sendDiscordMessage(channelId, message, botToken);
     const data = await response.json();
 
@@ -328,6 +398,220 @@ app.post("/send", async (c) => {
       message: "Message sent successfully",
       data,
     });
+  } catch (error) {
+    return c.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      500
+    );
+  }
+});
+
+// リッチメッセージ（埋め込みとボタン）送信エンドポイント
+app.post("/send/rich", async (c) => {
+  try {
+    const botToken = c.env.DISCORD_BOT_TOKEN;
+
+    if (!botToken) {
+      return c.json({ error: "DISCORD_BOT_TOKEN is not configured" }, 500);
+    }
+
+    // /sendエンドポイントと同じチャンネルIDをハードコーディング
+    const channelId = "1440630516389904467";
+
+    // メッセージテンプレートをエンドポイント内で定義
+    const payload = {
+      content: "📢 **進捗確認を記述してください。**",
+      embeds: [
+        {
+          title: "進捗確認",
+          description: "以下のボタンから進捗状況を確認できます。",
+          color: 16753920,
+          fields: [
+            {
+              name: "チェック状況",
+              value: "まだ確認されていません",
+            },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      components: [
+        {
+          type: 1,
+          components: [
+            {
+              type: 2,
+              style: 1,
+              label: "確認済みにする",
+              custom_id: "checked_today",
+            },
+          ],
+        },
+      ],
+    };
+
+    const response = await sendRichDiscordMessage(channelId, payload, botToken);
+    const data = await response.json();
+
+    if (!response.ok) {
+      let errorMessage = "Failed to send rich message to Discord";
+      let troubleshooting: string[] = [];
+
+      if (response.status === 401) {
+        errorMessage =
+          "Unauthorized: Discord Bot Token is invalid or not set correctly.";
+        troubleshooting = [
+          "Check your DISCORD_BOT_TOKEN in .dev.vars file",
+          "Verify the token is correct in Discord Developer Portal",
+          "Make sure the token hasn't been regenerated",
+        ];
+      } else if (response.status === 403) {
+        errorMessage =
+          "Forbidden: Bot doesn't have permission to send messages to this channel.";
+        troubleshooting = [
+          `Verify the bot is invited to the server (channel ID: ${channelId})`,
+          "Check bot permissions: 'Send Messages' and 'View Channels'",
+          "Verify channel permissions allow the bot to send messages",
+          "Make sure the bot role has access to the channel",
+          "Check if the channel is a text channel (not voice or category)",
+        ];
+      } else if (response.status === 404) {
+        errorMessage = "Channel not found: Invalid channel ID.";
+        troubleshooting = [
+          `Verify the channel ID is correct: ${channelId}`,
+          "Make sure developer mode is enabled to copy channel ID",
+          "Check if the channel exists and is accessible",
+        ];
+      }
+
+      return c.json(
+        {
+          error: errorMessage,
+          details: data,
+          statusCode: response.status,
+          channelId,
+          troubleshooting,
+        },
+        response.status as 400 | 401 | 403 | 404 | 500
+      );
+    }
+
+    return c.json({
+      success: true,
+      message: "Rich message sent successfully",
+      data,
+    });
+  } catch (error) {
+    return c.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      500
+    );
+  }
+});
+
+// Discordインタラクション処理エンドポイント
+app.post("/interactions", async (c) => {
+  try {
+    const botToken = c.env.DISCORD_BOT_TOKEN;
+
+    if (!botToken) {
+      return c.json({ error: "DISCORD_BOT_TOKEN is not configured" }, 500);
+    }
+
+    const interaction = await c.req.json();
+
+    // PINGリクエストの処理（Discordのヘルスチェック）
+    if (interaction.type === 1) {
+      return c.json({ type: 1 }); // PONG
+    }
+
+    // ボタンクリックなどのMESSAGE_COMPONENTインタラクション
+    if (interaction.type === 3) {
+      const customId = interaction.data?.custom_id;
+      const messageId = interaction.message?.id;
+      const channelId = interaction.channel_id;
+
+      if (customId === "checked_today") {
+        // メッセージを更新して「確認済み」状態にする
+        const updatedPayload = {
+          content: "📢 **進捗確認を記述してください。**",
+          embeds: [
+            {
+              title: "進捗確認",
+              description: "以下のボタンから進捗状況を確認できます。",
+              color: 5763719, // 緑色（確認済み）
+              fields: [
+                {
+                  name: "チェック状況",
+                  value: "✅ 確認済み",
+                },
+              ],
+              timestamp: new Date().toISOString(),
+            },
+          ],
+          components: [
+            {
+              type: 1,
+              components: [
+                {
+                  type: 2,
+                  style: 2, // Secondary (グレー) - 無効化されたボタンのように見せる
+                  label: "確認済み",
+                  custom_id: "checked_today",
+                  disabled: true, // ボタンを無効化
+                },
+                {
+                  type: 2,
+                  style: 5,
+                  label: "進捗を確認する",
+                  url: "https://bk-realty.co.jp/latest",
+                },
+              ],
+            },
+          ],
+        };
+
+        // メッセージを更新
+        const updateUrl = `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`;
+        const updateResponse = await fetch(updateUrl, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bot ${botToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatedPayload),
+        });
+
+        if (!updateResponse.ok) {
+          const errorData = await updateResponse.json();
+          console.error("Failed to update message:", errorData);
+        }
+
+        // インタラクションに応答（ユーザーに通知）
+        return c.json({
+          type: 4, // CHANNEL_MESSAGE_WITH_SOURCE
+          data: {
+            content: "✅ 進捗確認が完了しました！",
+            flags: 64, // EPHEMERAL - 送信者のみに表示
+          },
+        });
+      }
+    }
+
+    // 未対応のインタラクションタイプ
+    return c.json(
+      {
+        error: "Unsupported interaction type",
+        type: interaction.type,
+      },
+      400
+    );
   } catch (error) {
     return c.json(
       {
