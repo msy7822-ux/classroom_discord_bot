@@ -3,6 +3,11 @@ import { Hono } from "hono";
 // CloudflareBindings型は worker-configuration.d.ts でグローバルに定義されています
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
+// DiscordチャンネルID（定数）
+// const DISCORD_CHANNEL_ID = "1440630516389904467";
+// 一般チャンネル
+const DISCORD_CHANNEL_ID = "1433696094600302654";
+
 // Discord APIにメッセージを送信する関数
 async function sendDiscordMessage(
   channelId: string,
@@ -78,7 +83,7 @@ function createProgressCheckMessage() {
     embeds: [
       {
         title: "進捗確認",
-        description: "以下のボタンから進捗状況を確認できます。",
+        description: "進捗状況教えてください",
         color: 16753920,
         fields: [
           {
@@ -87,19 +92,6 @@ function createProgressCheckMessage() {
           },
         ],
         timestamp: new Date().toISOString(),
-      },
-    ],
-    components: [
-      {
-        type: 1,
-        components: [
-          {
-            type: 2,
-            style: 1,
-            label: "確認済みにする",
-            custom_id: "checked_today",
-          },
-        ],
       },
     ],
   };
@@ -112,7 +104,7 @@ async function sendProgressCheckMessage(botToken: string): Promise<{
   data?: unknown;
 }> {
   try {
-    const channelId = "1440630516389904467";
+    const channelId = DISCORD_CHANNEL_ID;
     const payload = createProgressCheckMessage();
 
     const response = await sendRichDiscordMessage(channelId, payload, botToken);
@@ -380,7 +372,7 @@ app.post("/send", async (c) => {
     }
 
     const body = await c.req.json();
-    const { channelId = "1440630516389904467", message } = body;
+    const { channelId = DISCORD_CHANNEL_ID, message } = body;
 
     if (!channelId || !message) {
       return c.json(
@@ -532,8 +524,6 @@ app.post("/interactions", async (c) => {
     // ボタンクリックなどのMESSAGE_COMPONENTインタラクション
     if (interaction.type === 3) {
       const customId = interaction.data?.custom_id;
-      const messageId = interaction.message?.id;
-      const channelId = interaction.channel_id;
 
       if (customId === "checked_today") {
         // メッセージを更新して「確認済み」状態にする
@@ -542,7 +532,7 @@ app.post("/interactions", async (c) => {
           embeds: [
             {
               title: "進捗確認",
-              description: "",
+              description: "以下のボタンから進捗状況を確認できます。",
               color: 5763719, // 緑色（確認済み）
               fields: [
                 {
@@ -553,31 +543,27 @@ app.post("/interactions", async (c) => {
               timestamp: new Date().toISOString(),
             },
           ],
+          components: [
+            {
+              type: 1,
+              components: [
+                {
+                  type: 2,
+                  style: 2, // Secondary (グレー)
+                  label: "確認済み",
+                  custom_id: "checked_today",
+                  disabled: true, // ボタンを無効化
+                },
+              ],
+            },
+          ],
         };
 
-        // メッセージを更新
-        const updateUrl = `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`;
-        const updateResponse = await fetch(updateUrl, {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bot ${botToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updatedPayload),
-        });
-
-        if (!updateResponse.ok) {
-          const errorData = await updateResponse.json();
-          console.error("Failed to update message:", errorData);
-        }
-
-        // インタラクションに応答（ユーザーに通知）
+        // インタラクションに即座に応答（3秒以内に応答が必要）
+        // type 6 = UPDATE_MESSAGE - 元のメッセージを更新
         return c.json({
-          type: 4, // CHANNEL_MESSAGE_WITH_SOURCE
-          data: {
-            content: "✅ 進捗確認が完了しました！",
-            flags: 64, // EPHEMERAL - 送信者のみに表示
-          },
+          type: 6, // UPDATE_MESSAGE
+          data: updatedPayload,
         });
       }
     }
