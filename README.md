@@ -25,10 +25,12 @@ npm run cf-typegen
 2. 環境変数の設定（ローカル開発）
    - `.dev.vars.example`を`.dev.vars`にコピー
    - `.dev.vars`ファイルに実際のDiscord Bot Tokenを設定
+
    ```bash
    cp .dev.vars.example .dev.vars
    # .dev.vars を編集して実際のTokenを設定
    ```
+
    - `.dev.vars`は`.gitignore`に含まれているため、Gitにコミットされません
 
 3. 本番環境へのデプロイ時
@@ -186,8 +188,8 @@ Cronトリガーにより、定期的に進捗確認メッセージを自動送�
 ```jsonc
 {
   "triggers": {
-    "crons": ["0 0 * * 1", "0 0 * * 4"]  // 毎週火曜日と金曜日のJST 9時（UTC 0時）
-  }
+    "crons": ["0 0 * * 1", "0 0 * * 4"], // 毎週火曜日と金曜日のJST 9時（UTC 0時）
+  },
 }
 ```
 
@@ -235,12 +237,14 @@ Cronトリガーにより、定期的に進捗確認メッセージを自動送�
 ### ローカル開発
 
 1. `.dev.vars`ファイルを作成してTokenを設定
+
    ```bash
    cp .dev.vars.example .dev.vars
    # .dev.vars を編集して実際のTokenを設定
    ```
 
 2. 開発サーバーを起動
+
    ```bash
    npm run dev
    ```
@@ -258,11 +262,13 @@ Cronトリガーにより、定期的に進捗確認メッセージを自動送�
 ### エラー対処
 
 #### 401 Unauthorized
+
 - `.dev.vars`ファイルの`DISCORD_BOT_TOKEN`が正しく設定されているか確認
 - Discord Developer PortalでTokenが正しいか確認
 - Tokenが再生成されていないか確認
 
 #### 403 Forbidden（Botにチャンネルへのアクセス権限がない）
+
 以下の手順で確認してください：
 
 1. **Botがサーバーに招待されているか確認**
@@ -287,6 +293,7 @@ Cronトリガーにより、定期的に進捗確認メッセージを自動送�
    - APIリクエストの`channelId`と一致しているか確認
 
 #### 404 Not Found
+
 - チャンネルIDが正しいか確認
 - 開発者モードを有効化してチャンネルIDをコピー
 - チャンネルが存在し、アクセス可能か確認
