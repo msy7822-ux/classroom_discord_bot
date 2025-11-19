@@ -587,11 +587,26 @@ app.post("/interactions", async (c) => {
   }
 });
 
-// Cron定期実行ハンドラー
+// ============================================
+// Cloudflare Workers エントリーポイント
+// ============================================
+// このexport defaultオブジェクトが、Cloudflare Workersのメインエントリーポイントです。
+// wrangler.jsoncの"main": "src/index.ts"で指定されたファイルから読み込まれます。
+//
+// scheduledイベントの実行フロー:
+// 1. wrangler.jsoncの"triggers.crons"でスケジュールを定義
+//    例: ["0 8 * * 2", "0 8 * * 5"] → 毎週火曜日と金曜日のUTC 8:00
+// 2. Cloudflareのランタイムが指定時刻にこの"scheduled"メソッドを自動的に呼び出す
+// 3. scheduledメソッド内で実際の処理（Discordメッセージ送信など）を実行
+//
+// 注意: scheduledメソッドは、wrangler.jsoncにcron設定がある場合のみ呼び出されます。
 export default {
+  // HTTPリクエストハンドラー（通常のAPIエンドポイント）
   async fetch(request: Request, env: CloudflareBindings): Promise<Response> {
     return app.fetch(request, env);
   },
+  // Cron定期実行ハンドラー
+  // Cloudflareのランタイムが、wrangler.jsoncで設定された時刻に自動的に呼び出します
   async scheduled(
     event: ScheduledEvent,
     env: CloudflareBindings,
