@@ -542,7 +542,7 @@ app.post("/interactions", async (c) => {
           embeds: [
             {
               title: "進捗確認",
-              description: "以下のボタンから進捗状況を確認できます。",
+              description: "",
               color: 5763719, // 緑色（確認済み）
               fields: [
                 {
@@ -551,26 +551,6 @@ app.post("/interactions", async (c) => {
                 },
               ],
               timestamp: new Date().toISOString(),
-            },
-          ],
-          components: [
-            {
-              type: 1,
-              components: [
-                {
-                  type: 2,
-                  style: 2, // Secondary (グレー) - 無効化されたボタンのように見せる
-                  label: "確認済み",
-                  custom_id: "checked_today",
-                  disabled: true, // ボタンを無効化
-                },
-                {
-                  type: 2,
-                  style: 5,
-                  label: "進捗を確認する",
-                  url: "https://bk-realty.co.jp/latest",
-                },
-              ],
             },
           ],
         };
