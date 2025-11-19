@@ -71,6 +71,72 @@ async function sendRichDiscordMessage(
   return response;
 }
 
+// 進捗確認リッチメッセージのテンプレートを生成する関数
+function createProgressCheckMessage() {
+  return {
+    content: "📢 **進捗確認を記述してください。**",
+    embeds: [
+      {
+        title: "進捗確認",
+        description: "以下のボタンから進捗状況を確認できます。",
+        color: 16753920,
+        fields: [
+          {
+            name: "チェック状況",
+            value: "まだ確認されていません",
+          },
+        ],
+        timestamp: new Date().toISOString(),
+      },
+    ],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 1,
+            label: "確認済みにする",
+            custom_id: "checked_today",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// リッチメッセージを送信する共通関数
+async function sendProgressCheckMessage(botToken: string): Promise<{
+  success: boolean;
+  error?: string;
+  data?: unknown;
+}> {
+  try {
+    const channelId = "1440630516389904467";
+    const payload = createProgressCheckMessage();
+
+    const response = await sendRichDiscordMessage(channelId, payload, botToken);
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Failed to send message: ${JSON.stringify(data)}`,
+      };
+    }
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
 // ルートエンドポイント
 app.get("/", (c) => {
   const tokenConfigured = !!c.env.DISCORD_BOT_TOKEN;
@@ -418,91 +484,23 @@ app.post("/send/rich", async (c) => {
       return c.json({ error: "DISCORD_BOT_TOKEN is not configured" }, 500);
     }
 
-    // /sendエンドポイントと同じチャンネルIDをハードコーディング
-    const channelId = "1440630516389904467";
+    // 共通関数を使用してメッセージを送信
+    const result = await sendProgressCheckMessage(botToken);
 
-    // メッセージテンプレートをエンドポイント内で定義
-    const payload = {
-      content: "📢 **進捗確認を記述してください。**",
-      embeds: [
-        {
-          title: "進捗確認",
-          description: "以下のボタンから進捗状況を確認できます。",
-          color: 16753920,
-          fields: [
-            {
-              name: "チェック状況",
-              value: "まだ確認されていません",
-            },
-          ],
-          timestamp: new Date().toISOString(),
-        },
-      ],
-      components: [
-        {
-          type: 1,
-          components: [
-            {
-              type: 2,
-              style: 1,
-              label: "確認済みにする",
-              custom_id: "checked_today",
-            },
-          ],
-        },
-      ],
-    };
-
-    const response = await sendRichDiscordMessage(channelId, payload, botToken);
-    const data = await response.json();
-
-    if (!response.ok) {
-      let errorMessage = "Failed to send rich message to Discord";
-      let troubleshooting: string[] = [];
-
-      if (response.status === 401) {
-        errorMessage =
-          "Unauthorized: Discord Bot Token is invalid or not set correctly.";
-        troubleshooting = [
-          "Check your DISCORD_BOT_TOKEN in .dev.vars file",
-          "Verify the token is correct in Discord Developer Portal",
-          "Make sure the token hasn't been regenerated",
-        ];
-      } else if (response.status === 403) {
-        errorMessage =
-          "Forbidden: Bot doesn't have permission to send messages to this channel.";
-        troubleshooting = [
-          `Verify the bot is invited to the server (channel ID: ${channelId})`,
-          "Check bot permissions: 'Send Messages' and 'View Channels'",
-          "Verify channel permissions allow the bot to send messages",
-          "Make sure the bot role has access to the channel",
-          "Check if the channel is a text channel (not voice or category)",
-        ];
-      } else if (response.status === 404) {
-        errorMessage = "Channel not found: Invalid channel ID.";
-        troubleshooting = [
-          `Verify the channel ID is correct: ${channelId}`,
-          "Make sure developer mode is enabled to copy channel ID",
-          "Check if the channel exists and is accessible",
-        ];
-      }
-
+    if (!result.success) {
       return c.json(
         {
-          error: errorMessage,
-          details: data,
-          statusCode: response.status,
-          channelId,
-          troubleshooting,
+          error: "Failed to send rich message",
+          details: result.error,
         },
-        response.status as 400 | 401 | 403 | 404 | 500
+        500
       );
     }
 
     return c.json({
       success: true,
       message: "Rich message sent successfully",
-      data,
+      data: result.data,
     });
   } catch (error) {
     return c.json(
@@ -623,4 +621,44 @@ app.post("/interactions", async (c) => {
   }
 });
 
-export default app;
+// Cron定期実行ハンドラー
+export default {
+  async fetch(request: Request, env: CloudflareBindings): Promise<Response> {
+    return app.fetch(request, env);
+  },
+  async scheduled(
+    event: ScheduledEvent,
+    env: CloudflareBindings,
+    ctx: ExecutionContext
+  ): Promise<void> {
+    // バックグラウンドで実行されるため、ctx.waitUntilを使用
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const botToken = env.DISCORD_BOT_TOKEN;
+
+          if (!botToken) {
+            console.error("DISCORD_BOT_TOKEN is not configured");
+            return;
+          }
+
+          const result = await sendProgressCheckMessage(botToken);
+
+          if (result.success) {
+            console.log(
+              "Progress check message sent successfully:",
+              result.data
+            );
+          } else {
+            console.error(
+              "Failed to send progress check message:",
+              result.error
+            );
+          }
+        } catch (error) {
+          console.error("Error in scheduled task:", error);
+        }
+      })()
+    );
+  },
+};

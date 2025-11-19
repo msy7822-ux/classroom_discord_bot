@@ -4,6 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-11-19",
   "logpush": true,
+  "triggers": {
+    "crons": ["0 0 * * 1", "0 0 * * 4"],
+  },
   // "compatibility_flags": [
   //   "nodejs_compat"
   // ],
