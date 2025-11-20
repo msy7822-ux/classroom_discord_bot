@@ -17,7 +17,7 @@
   // 実行場所: Cloudflareのグローバルエッジネットワーク上
   // 実行方法: src/index.tsの"scheduled"メソッドが自動的に呼び出される
   "triggers": {
-    "crons": ["0 8 * * 2", "0 8 * * 5"],
+    "crons": ["0 8 * * 3", "0 8 * * 6"],
   },
   // "compatibility_flags": [
   //   "nodejs_compat"
